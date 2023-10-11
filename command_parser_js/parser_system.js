@@ -52,7 +52,7 @@ export class Command_Parser {
         const re_match = re.compile(BaseMatch.string_to_rematch(e.word))
         _str.forEach( (item) => {
             const a = re_match.search(item)
-            if (a != null) s_list.append([a.start(),item])
+            if (a != null) s_list.push([a.start(),item])
         } )
         s_list.sort()
 

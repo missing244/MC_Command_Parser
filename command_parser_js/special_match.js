@@ -102,11 +102,11 @@ export class Relative_Offset_Float extends BaseMatch.Match_Base {
     */
     constructor(){
         super()
-        this.re_match = re.compile("~[-+]?[0-9\.]{0,}|[-+]?[0-9\.]{0,}")
+        this.re_match = re.compile("~[-\\+]?[0-9\\.]{0,}")
         this.re_test  = re.compile("^[-+]?([0-9]{0,}\\.[0-9]{1,}|[0-9]{1,}\\.[0-9]{0,}|[0-9]{1,})$")
     }
     _match_string(s,s_pointer) {
-        const _match = this.re_match.match(s,pos=s_pointer)
+        const _match = this.re_match.match(s,s_pointer)
         if (_match == null) {
             throw new Illegal_Match(`>>${s[s_pointer]}<< 不合法的相对偏量`, 
             Array(s_pointer,s_pointer + 1), s[s_pointer])
@@ -131,11 +131,11 @@ export class Local_Offset_Float extends BaseMatch.Match_Base {
     */
     constructor(){
         super()
-        this.re_match = re.compile("\\^[-+]?[0-9\.]{0,}|[-+]?[0-9\.]{0,}")
+        this.re_match = re.compile("(\\^)[-\\+]?[0-9\\.]{0,}")
         this.re_test  = re.compile("^[-+]?([0-9]{0,}\\.[0-9]{1,}|[0-9]{1,}\\.[0-9]{0,}|[0-9]{1,})$")
     }
     _match_string(s,s_pointer) {
-        const _match = this.re_match.match(s,pos=s_pointer)
+        const _match = this.re_match.match(s,s_pointer)
         if (_match == null) {
             throw new Illegal_Match(`>>${s[s_pointer]}<< 不合法的相对偏量`, 
             Array(s_pointer,s_pointer + 1), s[s_pointer])
@@ -160,8 +160,27 @@ export function Pos_Tree(...end_node) {
     返回匹配列表，请将该列表传入add_leaves时添加解包操作
     */
     return [
-        new Relative_Offset_Float().add_leaves(...end_node),
-        new Local_Offset_Float().add_leaves(...end_node)
+        new BaseMatch.Float().add_leaves(
+            new Relative_Offset_Float().add_leaves(
+                new Relative_Offset_Float().add_leaves(...end_node),
+                new BaseMatch.Float().add_leaves(...end_node),
+            ),
+            new BaseMatch.Float().add_leaves(
+                new Relative_Offset_Float().add_leaves(...end_node),
+                new BaseMatch.Float().add_leaves(...end_node),
+            )
+        ),
+        new Relative_Offset_Float().add_leaves(
+            new Relative_Offset_Float().add_leaves(
+                new Relative_Offset_Float().add_leaves(...end_node),
+                new BaseMatch.Float().add_leaves(...end_node),
+            ),
+            new BaseMatch.Float().add_leaves(
+                new Relative_Offset_Float().add_leaves(...end_node),
+                new BaseMatch.Float().add_leaves(...end_node),
+            )
+        ),
+        new Local_Offset_Float().add_leaves(new Local_Offset_Float().add_leaves(new Local_Offset_Float().add_leaves(...end_node)))
     ]
 }
 export function Range_Tree(...end_node) {

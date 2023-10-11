@@ -108,7 +108,7 @@ class Relative_Offset_Float(BaseMatch.Match_Base) :
     
     def __init__(self) -> None :
         super().__init__()
-        self.re_match = re.compile("~[-+]?[0-9\.]{0,}|[-+]?[0-9\.]{0,}")
+        self.re_match = re.compile("~[-\\+]?[0-9\\.]{0,}")
         self.re_test  = re.compile("^[-+]?([0-9]{0,}\\.[0-9]{1,}|[0-9]{1,}\\.[0-9]{0,}|[0-9]{1,})$")
 
     def _match_string(self,s:str,s_pointer:int): 
@@ -133,7 +133,7 @@ class Local_Offset_Float(BaseMatch.Match_Base) :
     
     def __init__(self) -> None :
         super().__init__()
-        self.re_match = re.compile("\\^[-+]?[0-9\.]{0,}")
+        self.re_match = re.compile("(\\^)[-\\+]?[0-9\\.]{0,}")
         self.re_test  = re.compile("^[-+]?([0-9]{0,}\\.[0-9]{1,}|[0-9]{1,}\\.[0-9]{0,}|[0-9]{1,})$")
 
     def _match_string(self,s:str,s_pointer:int): 
@@ -156,8 +156,27 @@ def Pos_Tree(*end_node:BaseMatch.Match_Base) -> List[BaseMatch.Match_Base] :
     返回匹配列表，请将该列表传入add_leaves时添加解包操作
     """
     return [
-        Relative_Offset_Float().add_leaves(*end_node),
-        Local_Offset_Float().add_leaves(*end_node)
+        BaseMatch.Float().add_leaves(
+            Relative_Offset_Float().add_leaves(
+                Relative_Offset_Float().add_leaves(*end_node),
+                BaseMatch.Float().add_leaves(*end_node),
+            ),
+            BaseMatch.Float().add_leaves(
+                Relative_Offset_Float().add_leaves(*end_node),
+                BaseMatch.Float().add_leaves(*end_node),
+            )
+        ),
+        Relative_Offset_Float().add_leaves(
+            Relative_Offset_Float().add_leaves(
+                Relative_Offset_Float().add_leaves(*end_node),
+                BaseMatch.Float().add_leaves(*end_node),
+            ),
+            BaseMatch.Float().add_leaves(
+                Relative_Offset_Float().add_leaves(*end_node),
+                BaseMatch.Float().add_leaves(*end_node),
+            )
+        ),
+        Local_Offset_Float().add_leaves(Local_Offset_Float().add_leaves(Local_Offset_Float().add_leaves(*end_node)))
     ]
 
 def Range_Tree(*end_node:BaseMatch.Match_Base) -> List[BaseMatch.Match_Base] :

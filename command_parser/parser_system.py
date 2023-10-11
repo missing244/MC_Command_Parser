@@ -3,11 +3,10 @@
 class Command_Parser
 """
 
-import command_parser.base_match_class as BaseMatch
-import command_parser.special_match as SpecialMatch
+from . import base_match_class as BaseMatch
+from . import special_match as SpecialMatch
 
 from typing import Dict,Union,List,Tuple
-
 import re,traceback
 
 
