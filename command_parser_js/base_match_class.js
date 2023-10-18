@@ -39,6 +39,13 @@ export class Match_Base {
     ------------------
     你不应该直接使用这个类\n
     ------------------------------------
+    所有从此基类继承的类都应该有以下实例化参数\n
+    token_type : 定义该匹配的参数含义\n
+    token_type的格式如下 -> "Dimension:dimension1;dimension2;...."\n
+    Dimension 是对 token 的参数类型标注\n
+    dimension1 是对 自动补全列表 的第1个参数进行提示解释\n
+    后续依次类推.......\n
+    ------------------------------------
     所有从此基类继承的类都有以下公用方法\n
     add_leaves : 添加同级的命令分支\n
     ------------------------------------
@@ -46,9 +53,15 @@ export class Match_Base {
     _match_string : 提供自动补全的字符串列表，必须写明传参s、s_pointer，s是源字符串，s_pointer是源字符串当前匹配停止的位置
     _auto_complete : 提供自动补全的字符串列表
     */
-    constructor() { 
+    constructor(token_type) { 
         if (new.target === Match_Base) throw new TypeError("Cannot construct AbstractClass instances directly")
+        if (typeof token_type != "string") {throw new TypeError("token_type 提供字符串以外的参数")}
         this.tree_leaves = []
+
+        const token_type1 = token_type.split(":",2)
+        this.token_type = token_type1[0]
+        if (token_type1.length > 1) this.argument_dimension = token_type1[1].split(";")
+        else this.argument_dimension = []
     }
     add_leaves(...obj) {
         obj.forEach( (item) => {
@@ -76,7 +89,7 @@ export class End_Tag extends Match_Base {
       >>> End_Tag()
     */
     constructor() {
-        super()
+        super("END")
         this.re_match = re.compile(".{0,}")
     }
 
@@ -88,7 +101,7 @@ export class End_Tag extends Match_Base {
         }
     }
 
-    _auto_complete(){ return [] }
+    _auto_complete(){ return {} }
 }
 
 
@@ -99,16 +112,17 @@ export class Enum extends Match_Base {
     在下一次匹配中，只能匹配到 s 参数提供的字符串
     ------------------------------
     实例化参数
+    token_type : 定义该匹配的参数含义
     ...s : 所有可以匹配的字符串
-    >>> Enum("ab","cd","ef")
+    >>> Enum("Enum",  "ab","cd","ef")
     */
-    constructor(...s){
+    constructor(token_type, ...s){
         const _m = []
         s.forEach( (item) => {
             if (typeof item != "string") throw new TypeError("s 提供字符串以外的参数")
             _m.push(string_to_rematch(item))
         } )
-        super()
+        super(token_type)
         this.base_input = s
         this.re_match = re.compile(`[^${TERMINATOR_RE}]{0,}`)
         this.re_test  = re.compile(`^(${_m.join("|")})$`) 
@@ -119,9 +133,16 @@ export class Enum extends Match_Base {
             throw new Not_Match(`>>${_match.group()}<< 并不是有效字符`,
             Array(_match.start(),_match.end()), _match.group())
         }
-        return _match
+        return {"type":this.token_type, "token":_match}
     }
-    _auto_complete(){return Array(...this.base_input)} 
+    _auto_complete(){
+        const a = {}
+        for (let index = 0; index < this.base_input.length; index++) {
+            if (index < this.argument_dimension.length) a[this.base_input[index]] = this.argument_dimension[index]
+            else a[this.base_input[index]] = ""
+        }
+        return a
+    } 
 }
 export class Char extends Match_Base {
     /*
@@ -130,12 +151,13 @@ export class Char extends Match_Base {
     在下一次匹配中，只能匹配到 s 参数提供的字符串
     ------------------------------
     实例化参数
+    token_type : 定义该匹配的参数含义
     s : 可以匹配到的字符串
-    >>> Char("ab")
+    >>> Char("Command",  "ab")
     */
-    constructor(s){
+    constructor(token_type,s){
+        super(token_type)
         if (typeof s != "string") {throw new TypeError("s 提供字符串以外的参数")}
-        super()
         this.base_input = s
         this.re_match = re.compile(`[^${TERMINATOR_RE}]{0,}`)
         this.re_test  = re.compile(`^(${string_to_rematch(s)})$`) 
@@ -146,9 +168,14 @@ export class Char extends Match_Base {
             throw new Not_Match(`>>${_match.group()}<< 并不是有效字符`,
             Array(_match.start(),_match.end()), _match.group())
         }
-        return _match
+        return {"type":this.token_type, "token":_match}
     }
-    _auto_complete(){ return Array(this.base_input) } 
+    _auto_complete(){ 
+        const a = {}
+        if (this.argument_dimension.length > 0) a[this.base_input] = this.argument_dimension[0]
+        else a[this.base_input] = ""
+        return a
+    } 
 }
 export class KeyWord extends Match_Base {
     /*
@@ -158,11 +185,12 @@ export class KeyWord extends Match_Base {
     但是匹配器传入的字符串阅读指针，一定跳过分隔符字符，例如命令中的空格\n
     ------------------------------
     实例化参数
+    token_type : 定义该匹配的参数含义
     ...s : 可以匹配的所有字符串 
-    >>> KeyWord("[")
+    >>> KeyWord("Selector_Start",  "[")
     */
-    constructor(...s) {
-        super()
+    constructor(token_type,...s) {
+        super(token_type)
         const _m = []
         this.re_match = []
         s.forEach( (item) => {
@@ -196,9 +224,16 @@ export class KeyWord extends Match_Base {
                 max_index = index
             }
         }
-        return _match[max_index]
+        return {"type":this.token_type, "token":_match[max_index]}
     }
-    _auto_complete(){ return Array(this.base_input) }
+    _auto_complete(){
+        const a = {}
+        for (let index = 0; index < this.base_input.length; index++) {
+            if (index < this.argument_dimension.length) a[this.base_input[index]] = this.argument_dimension[index]
+            else a[this.base_input[index]] = ""
+        }
+        return a
+    }
 }
 export class Int extends Match_Base {
     /*
@@ -207,11 +242,12 @@ export class Int extends Match_Base {
     在下一次匹配中，需要匹配到合法的整数
     ------------------------------
     实例化参数
+    token_type : 定义该匹配的参数含义
     ...unit_word : 所有可匹配的单位字符串
-    >>> Int("L","D")
+    >>> Int("Count",  "L","D")
     */
-    constructor(...unit_word) {
-        super()
+    constructor(token_type, ...unit_word) {
+        super(token_type)
         this.re_match = re.compile(`([^${TERMINATOR_RE}]|\\+){0,}`)
         this.re_test  = re.compile("^(-+)?[0-9]{1,}$")
         this.unit_word = unit_word
@@ -236,17 +272,19 @@ export class Int extends Match_Base {
         else a = this.re_test.search(_match.group())
         if (a == null) throw new Not_Match(`>>${_match.group()}<< 并不是有效的整数`,
         Array(_match.start(),_match.end()), _match.group())
-        return _match
+        return {"type":this.token_type, "token":_match}
     }
     _auto_complete(){
+        let aaaa = ""
+        if (this.argument_dimension.length) aaaa = this.argument_dimension[0]
         if (this.unit_word.length) {
-            const _m_ = []
+            const _m_ = {}
             this.unit_word.forEach( (item) => {
-                _m_.push( "0" + item )
+                _m_[( "0" + item )] = aaaa
             })
             return _m_
         }
-        else return ["0"]
+        else return {"0":aaaa}
     }
 }
 export class Float extends Match_Base {
@@ -256,11 +294,12 @@ export class Float extends Match_Base {
     在下一次匹配中，需要匹配到合法的浮点数\n
     ------------------------------
     实例化参数\n
+    token_type : 定义该匹配的参数含义
     ...unit_word : 所有可匹配的单位字符串\n
-    >>> Float("L","D")
+    >>> Float("Time",  "L","D")
     */
-    constructor(...unit_word) {
-        super()
+    constructor(token_type, ...unit_word) {
+        super(token_type)
         this.re_match = re.compile(`([^${TERMINATOR_RE}]|\\+){0,}`)
         this.re_test  = re.compile("^^[-+]?([0-9]{0,}\\.[0-9]{1,}|[0-9]{1,}\\.[0-9]{0,}|[0-9]{1,})$")
         this.unit_word = unit_word
@@ -285,17 +324,19 @@ export class Float extends Match_Base {
         else a = this.re_test.search(_match.group())
         if (a == null) throw new Not_Match(`>>${_match.group()}<< 并不是有效的浮点数`,
         Array(_match.start(),_match.end()), _match.group())
-        return _match
+        return {"type":this.token_type, "token":_match}
     }
     _auto_complete(){
+        let aaaa = ""
+        if (this.argument_dimension.length) aaaa = this.argument_dimension[0]
         if (this.unit_word.length) {
-            const _m_ = []
+            const _m_ = {}
             this.unit_word.forEach( (item) => {
-                _m_.push( "0" + item )
+                _m_[( "0" + item )] = aaaa
             })
             return _m_
         }
-        else return ["0"]
+        else return {"0":aaaa}
     }
 }
 
@@ -308,19 +349,42 @@ export class AnyString extends Match_Base {
     适用于Minecraft ID
     ------------------------------
     实例化参数
+    token_type : 定义该匹配的参数含义
     atuo_complete : 自动提示将会提示的内容列表
-    >>> AnyString()
+    >>> AnyString("ID")
     */
-    constructor(auto_complete=[]) {
-        super()
+    constructor(token_type,auto_complete={}) {
+        super(token_type)
         this.re_match = re.compile(`[^${TERMINATOR_RE}]{0,}`)
         this.auto_complete = auto_complete
     }
     _match_string(s, s_pointer){
         const _match = this.re_match.match(s, s_pointer)
-        return _match
+        return {"type":this.token_type, "token":_match}
     }
-    _auto_complete() {return Array(this.auto_complete)}
+    _auto_complete() {return this.auto_complete}
+}
+export class AnyMsg extends Match_Base {
+    /*
+    任意消息
+    ------------------------------
+    在下一次匹配中，直接匹配后续所有的字符\n
+    适用于title say等消息\n
+    ------------------------------
+    实例化参数\n
+    token_type : 定义该匹配的参数含义\n
+    terminator : 匹配停止的所有字符\n
+    >>> AnyMsg("Msg")
+    */
+    constructor(token_type) {
+        super(token_type)
+        this.re_match = re.compile(".{0,}")
+    }
+    _match_string(s, s_pointer){
+        const _match = this.re_match.match(s, s_pointer)
+        return {"type":this.token_type, "token":_match}
+    }
+    _auto_complete() {return {}}
 }
 
 

@@ -33,6 +33,13 @@ class Match_Base(metaclass=abc.ABCMeta) :
     ------------------
     你不应该直接使用这个类\n
     ------------------------------------
+    所有从此基类继承的类都应该有以下实例化参数\n
+    token_type : 定义该匹配的参数含义\n
+    token_type的格式如下 -> "Dimension:dimension1;dimension2;...."\n
+    Dimension 是对 token 的参数类型标注\n
+    dimension1 是对 自动补全列表 的第1个参数进行提示解释\n
+    后续依次类推.......\n
+    ------------------------------------
     所有从此基类继承的类都有以下公用方法\n
     add_leaves : 添加同级的命令分支\n
     ------------------------------------
@@ -41,8 +48,13 @@ class Match_Base(metaclass=abc.ABCMeta) :
     _auto_complete : 提供自动补全的字符串列表
     '''
 
-    def __init__(self) -> None :
+    def __init__(self,token_type:str) -> None :
+        if not isinstance(token_type,str) : raise TypeError("token_type 提供字符串以外的参数")
+        token_type1 = token_type.split(":",1)
+        self.token_type = token_type1[0]
         self.tree_leaves : List[Match_Base] = []
+        if len(token_type1) > 1 : self.argument_dimension = token_type1[1].split(";")
+        else : self.argument_dimension = []
 
     def __repr__(self) -> str:
         return self.__class__.__name__
@@ -58,7 +70,7 @@ class Match_Base(metaclass=abc.ABCMeta) :
     def _match_string(self,s:str,s_pointer:int) -> re.Match : pass
     
     @abc.abstractmethod
-    def _auto_complete(self) -> List[str] : pass
+    def _auto_complete(self) -> Dict[str,str] : pass
 
 class End_Tag(Match_Base) :
     """
@@ -71,7 +83,7 @@ class End_Tag(Match_Base) :
     """
     
     def __init__(self) -> None :
-        super().__init__()
+        super().__init__("END")
         self.re_match = re.compile(".{0,}")
 
     def _match_string(self, s:str, s_pointer:int): 
@@ -79,7 +91,7 @@ class End_Tag(Match_Base) :
         if _match and _match.group().__len__() > 0 : 
             raise To_Many_Args(">>%s<< 多余的参数" % _match.group(), pos=(_match.start(),_match.end()), word=_match.group())
 
-    def _auto_complete(self) -> List[str] : return []
+    def _auto_complete(self) -> Dict[str,str] : return {}
 
 
 class Enum(Match_Base) :
@@ -89,19 +101,20 @@ class Enum(Match_Base) :
     在下一次匹配中，只能匹配到 s 参数提供的字符串\n
     ------------------------------
     实例化参数\n
+    token_type : 定义该匹配的参数含义\n
     *s : 所有可以匹配的字符串\n
     terminator : 匹配停止的所有字符\n
-    >>> Enum("ab","cd","ef")
+    >>> Enum("Enum",  "ab","cd","ef")
     """
     
     def __repr__(self) -> str:
         return str(self.re_test)
-    
-    def __init__(self, *s:str, terminator:str=TERMINATOR_RE) -> None :
+
+    def __init__(self, token_type:str, *s:str, terminator:str=TERMINATOR_RE) -> None :
         for i in s :
             if not isinstance(i,str) : raise TypeError("s 提供字符串以外的参数")
         if not isinstance(terminator,str) : raise TypeError("terminator 提供字符串以外的参数")
-        super().__init__()
+        super().__init__(token_type)
         self.base_input = s
         self.re_match = re.compile("[^%s]{0,}" % terminator)
         self.re_test  = re.compile("^(%s)$" % "|".join([string_to_rematch(i) for i in s])) 
@@ -110,10 +123,15 @@ class Enum(Match_Base) :
         _match = self.re_match.match(s,pos=s_pointer)
         if not self.re_test.search(_match.group()) : 
             raise Not_Match(">>%s<< 并不是有效字符" % _match.group(), pos=(_match.start(),_match.end()), word=_match.group())
-        return _match
+        return {"type":self.token_type, "token":_match}
 
-    def _auto_complete(self) -> List[str]: 
-        return list(self.base_input)
+    def _auto_complete(self) -> Dict[str,str]: 
+        a = {}
+        for i in range(len(self.base_input)) :
+            if i < len(self.argument_dimension) : 
+                a[self.base_input[i]] = self.argument_dimension[i]
+            else : a[self.base_input[i]] = ""
+        return a
 
 class Char(Match_Base) :
     """
@@ -122,17 +140,18 @@ class Char(Match_Base) :
     在下一次匹配中，只能匹配到 s 参数提供的字符串\n
     ------------------------------
     实例化参数\n
+    token_type : 定义该匹配的参数含义\n
     s : 可以匹配到的字符串\n
     terminator : 匹配停止的所有字符\n
-    >>> Char("ab")
+    >>> Char("Command",  "ab")
     """
     def __repr__(self) -> str:
         return str(self.re_test)
     
-    def __init__(self, s:str, terminator:str=TERMINATOR_RE) -> None :
+    def __init__(self, token_type:str, s:str, terminator:str=TERMINATOR_RE) -> None :
         if not isinstance(s,str) : raise TypeError("s 提供字符串以外的参数")
         if not isinstance(terminator,str) : raise TypeError("terminator 提供字符串以外的参数")
-        super().__init__()
+        super().__init__(token_type)
         self.base_input = s
         self.re_match = re.compile("[^%s]{0,}" % terminator)
         self.re_test  = re.compile("^(%s)$" % string_to_rematch(s)) 
@@ -141,10 +160,14 @@ class Char(Match_Base) :
         _match = self.re_match.match(s,pos=s_pointer)
         if not self.re_test.search(_match.group()) : 
             raise Not_Match(">>%s<< 并不是有效字符" % _match.group(), pos=(_match.start(),_match.end()), word=_match.group())
-        return _match
+        return {"type":self.token_type, "token":_match}
 
-    def _auto_complete(self) -> List[str] : 
-        return [self.base_input]
+    def _auto_complete(self) -> Dict[str,str] : 
+        a = {}
+        if len(self.argument_dimension) > 0 : 
+            a[self.base_input] = self.argument_dimension[0]
+        else : a[self.base_input] = ""
+        return a
 
 class KeyWord(Match_Base) :
     """
@@ -154,16 +177,18 @@ class KeyWord(Match_Base) :
     但是匹配器传入的字符串阅读指针，一定跳过分隔符字符，例如命令中的空格\n
     ------------------------------
     实例化参数\n
+    token_type : 定义该匹配的参数含义\n
     *s : 可以匹配的所有字符串\n
-    >>> KeyWord("[")
+    >>> KeyWord("Selector_Start",  "[")
     """
     def __repr__(self) -> str:
         return str(self.re_test)
 
-    def __init__(self, *s:str) -> None :
+    def __init__(self, token_type:str, *s:str) -> None :
+        if not isinstance(token_type,str) : raise TypeError("type 提供字符串以外的参数")
         for i in s :
             if not isinstance(i,str) : raise TypeError("s 提供字符串以外的参数")
-        super().__init__()
+        super().__init__(token_type)
         self.base_input = s
         self.re_match   = [re.compile(".{1,%s}" % len(i)) for i in s]
         self.re_test    = re.compile( "|".join( [string_to_rematch(i) for i in s] ) )
@@ -174,10 +199,15 @@ class KeyWord(Match_Base) :
         if not any(a) : raise Not_Match(">>%s<< 并不是有效的字符" % _match[0].group(), 
             pos=(_match[0].start(),_match[0].end()), word=_match[0].group())
         b = [i.group().__len__() for i in a if (i)]
-        return _match[b.index(max(b))]
+        return {"type":self.token_type, "token":_match[b.index(max(b))]}
 
-    def _auto_complete(self) -> List[str] : 
-        return list(self.base_input)
+    def _auto_complete(self) -> Dict[str,str] : 
+        a = {}
+        for i in range(len(self.base_input)) :
+            if i < len(self.argument_dimension) : 
+                a[self.base_input[i]] = self.argument_dimension[i]
+            else : a[self.base_input[i]] = ""
+        return a
 
 class Int(Match_Base) :
     """
@@ -186,16 +216,17 @@ class Int(Match_Base) :
     在下一次匹配中，需要匹配到合法的整数\n
     ------------------------------
     实例化参数\n
+    token_type : 定义该匹配的参数含义\n
     terminator : 匹配停止的所有字符\n
     *unit_word : 所有可匹配的单位字符串\n
-    >>> Int("L","D")
+    >>> Int("Count",   "L","D")
     """
 
-    def __init__(self, *unit_word:str, terminator:str=TERMINATOR_RE) -> None :
+    def __init__(self, token_type:str, *unit_word:str, terminator:str=TERMINATOR_RE) -> None :
         if not isinstance(terminator,str) : raise TypeError("terminator 提供字符串以外的参数")
         for i in unit_word :
             if not isinstance(i,str) : raise TypeError("unit_word 提供字符串以外的参数")
-        super().__init__()
+        super().__init__(token_type)
         self.re_match = re.compile("[^%s]{0,}" % terminator)
         self.re_test  = re.compile("^(-+)?[0-9]{1,}$")
         self.unit_word = unit_word
@@ -209,11 +240,13 @@ class Int(Match_Base) :
             a = self.re_test.search(_match.group()[0:b.start()])
         else : a = self.re_test.search(_match.group())
         if not a : raise Not_Match(">>%s<< 并不是有效的整数" % _match.group(), pos=(_match.start(),_match.end()), word=_match.group())
-        return _match
+        return {"type":self.token_type, "token":_match}
 
-    def _auto_complete(self) -> List[str]: 
-        if self.unit_word : return [(str("0" + i)) for i in self.unit_word]
-        else : return ["0"]
+    def _auto_complete(self) -> Dict[str,str]:
+        aaaa = ""
+        if len(self.argument_dimension) : aaaa = self.argument_dimension[0]
+        if self.unit_word : return {(str("0" + i)):aaaa for i in self.unit_word}
+        else : return {"0":aaaa}
 
 class Float(Match_Base) :
     """
@@ -222,16 +255,17 @@ class Float(Match_Base) :
     在下一次匹配中，需要匹配到合法的浮点数\n
     ------------------------------
     实例化参数\n
+    token_type : 定义该匹配的参数含义\n
     terminator : 匹配停止的所有字符\n
     *unit_word : 所有可匹配的单位字符串\n
-    >>> Float("L","D")
+    >>> Float("Time",     "L","D")
     """
     
-    def __init__(self, *unit_word:str, terminator:str=TERMINATOR_RE) -> None :
+    def __init__(self, token_type:str, *unit_word:str, terminator:str=TERMINATOR_RE) -> None :
         if not isinstance(terminator,str) : raise TypeError("terminator 提供字符串以外的参数")
         for i in unit_word :
             if not isinstance(i,str) : raise TypeError("unit_word 提供字符串以外的参数")
-        super().__init__()
+        super().__init__(token_type)
         self.re_match = re.compile("[^%s]{0,}" % terminator)
         self.re_test  = re.compile("^[-+]?([0-9]{0,}\\.[0-9]{1,}|[0-9]{1,}\\.[0-9]{0,}|[0-9]{1,})$") 
         self.unit_word = unit_word
@@ -245,11 +279,13 @@ class Float(Match_Base) :
             a = self.re_test.search(_match.group()[0:b.start()])
         else : a = self.re_test.search(_match.group())
         if not a : raise Not_Match(">>%s<< 并不是有效的浮点数" % _match.group(), pos=(_match.start(),_match.end()), word=_match.group())
-        return _match
+        return {"type":self.token_type, "token":_match}
 
-    def _auto_complete(self) -> List[str] : 
-        if self.unit_word : return [("0" + i) for i in self.unit_word]
-        else : return ["0"]
+    def _auto_complete(self) -> Dict[str,str] : 
+        aaaa = ""
+        if len(self.argument_dimension) : aaaa = self.argument_dimension[0]
+        if self.unit_word : return {("0" + i):aaaa for i in self.unit_word}
+        else : return {"0":aaaa}
 
 
 class AnyString(Match_Base) :
@@ -260,23 +296,49 @@ class AnyString(Match_Base) :
     适用于Minecraft ID\n
     ------------------------------
     实例化参数\n
-    terminator : 匹配停止的所有字符\n
+    token_type : 定义该匹配的参数含义\n
     atuo_complete : 自动提示将会提示的内容\n
-    >>> AnyString()
+    terminator : 匹配停止的所有字符\n
+    >>> AnyString("ID")
     """
     
-    def __init__(self, terminator:str=TERMINATOR_RE, atuo_complete:List[str]=[]) -> None :
+    def __init__(self, token_type:str, atuo_complete:Dict[str,str]={}, terminator:str=TERMINATOR_RE) -> None :
         if not isinstance(terminator,str) : raise TypeError("terminator 提供字符串以外的参数")
-        super().__init__()
+        super().__init__(token_type)
         self.re_match = re.compile("[^%s]{0,}" % terminator)
         self.atuo_complete = atuo_complete
 
     def _match_string(self, s:str, s_pointer:int): 
         _match = self.re_match.match(s, pos=s_pointer)
-        return _match
+        return {"type":self.token_type, "token":_match}
 
-    def _auto_complete(self) -> List[str] : 
+    def _auto_complete(self) -> Dict[str,str] : 
         return self.atuo_complete
+
+class AnyMsg(Match_Base) :
+    """
+    任意消息
+    ------------------------------
+    在下一次匹配中，直接匹配后续所有的字符\n
+    适用于title say等消息\n
+    ------------------------------
+    实例化参数\n
+    token_type : 定义该匹配的参数含义\n
+    atuo_complete : 自动提示将会提示的内容\n
+    terminator : 匹配停止的所有字符\n
+    >>> AnyMsg("Msg")
+    """
+    
+    def __init__(self, token_type:str) -> None :
+        super().__init__(token_type)
+        self.re_match = re.compile(".{0,}")
+
+    def _match_string(self, s:str, s_pointer:int): 
+        _match = self.re_match.match(s, pos=s_pointer)
+        return {"type":self.token_type, "token":_match}
+
+    def _auto_complete(self) -> Dict[str,str] : 
+        return {}
 
 
 

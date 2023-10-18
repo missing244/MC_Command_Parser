@@ -42,23 +42,19 @@ export class Command_Parser {
     reset_parser_tree() {this.current_leaves = this.Tree}
     _jump_space(s, s_pointer) { return this.separator_re_match.match(s,s_pointer) }
     _get_auto_complete(e) {
-        let _str = []
+        let _str = {}
         for (let index = 0; index < this.current_leaves.tree_leaves.length; index++) {
             const element = this.current_leaves.tree_leaves[index];
-            _str = _str.concat( element._auto_complete() )
+            Object.assign(_str, _str, element._auto_complete())
         }
 
-        const s_list = []
         const re_match = re.compile(BaseMatch.string_to_rematch(e.word))
-        _str.forEach( (item) => {
+        Object.keys(_str).forEach( (item) => {
             const a = re_match.search(item)
-            if (a != null) s_list.push([a.start(),item])
+            if (a == null) delete _str[item]
         } )
-        s_list.sort()
 
-        const return_list = []
-        s_list.forEach( (item) => { return_list.push(item[1]) } )
-        return return_list
+        return _str
     }
     _parser(command_str){ 
         let command_str_pointer = 0 ; let Token_list = []
@@ -75,7 +71,7 @@ export class Command_Parser {
                     is_not_successs = false
                     this.current_leaves = i
                     if ( isinstance(i,BaseMatch.End_Tag) ) break
-                    command_str_pointer = a.end()
+                    command_str_pointer = a["token"].end()
                     Token_list.push(a)
                     break
                 }

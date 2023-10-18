@@ -46,16 +46,14 @@ class Command_Parser :
         return self.separator_re_match.match(s,s_pointer)
 
     def _get_auto_complete(self,e:Exception) :
-        _str = []
-        for i in self.current_leaves.tree_leaves : _str.extend(i._auto_complete())
+        _str = {}
+        for i in self.current_leaves.tree_leaves : _str.update(i._auto_complete())
 
-        s_list = []
         re_match = re.compile(BaseMatch.string_to_rematch(e.word))
-        for i in _str :
+        for i in list(_str.keys()) :
             a = re_match.search(i)
-            if a : s_list.append([a.start(),i])
-        s_list.sort()
-        return [i[1] for i in s_list]
+            if a == None : del _str[i]
+        return _str
 
     def _parser(self,command_str:str) -> List[re.Match] :
         command_str_pointer = 0 ; self.Token_list = Token_list = []
@@ -71,7 +69,7 @@ class Command_Parser :
                     is_not_successs = False
                     self.current_leaves = i
                     if isinstance(i,BaseMatch.End_Tag) : break
-                    command_str_pointer = a.end()
+                    command_str_pointer = a["token"].end()
                     Token_list.append(a)
                     break
 
